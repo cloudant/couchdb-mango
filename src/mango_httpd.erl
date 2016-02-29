@@ -43,7 +43,7 @@ handle_req(#httpd{} = Req, Db0) ->
                 {<<"error">>, ErrorStr},
                 {<<"reason">>, ReasonStr}
             ]},
-            chttpd:send_json(Req, Code, Resp)
+            couch_httpd:send_json(Req, Code, Resp)
     end.
 
 
@@ -59,7 +59,7 @@ handle_req_int(_, _) ->
 
 handle_index_req(#httpd{method='GET', path_parts=[_, _]}=Req, Db) ->
     Params = lists:flatmap(fun({K, V}) -> parse_index_param(K, V) end,
-        chttpd:qs(Req)),
+        couch_httpd:qs(Req)),
     Idxs = lists:sort(mango_idx:list(Db)),
     JsonIdxs0 = lists:map(fun mango_idx:to_json/1, Idxs),
     TotalRows = length(JsonIdxs0),
@@ -78,11 +78,11 @@ handle_index_req(#httpd{method='GET', path_parts=[_, _]}=Req, Db) ->
             Skip0
     end,
     JsonIdxs = lists:sublist(JsonIdxs0, Skip+1, Limit),
-	chttpd:send_json(Req, {[{total_rows, TotalRows}, {indexes, JsonIdxs}]});
+	couch_httpd:send_json(Req, {[{total_rows, TotalRows}, {indexes, JsonIdxs}]});
 
 handle_index_req(#httpd{method='POST', path_parts=[_, _]}=Req, Db) ->
-    chttpd:validate_ctype(Req, "application/json"),
-    {ok, Opts} = mango_opts:validate_idx_create(chttpd:json_body_obj(Req)),
+    couch_httpd:validate_ctype(Req, "application/json"),
+    {ok, Opts} = mango_opts:validate_idx_create(couch_httpd:json_body_obj(Req)),
     {ok, Idx0} = mango_idx:new(Db, Opts),
     {ok, Idx} = mango_idx:validate_new(Idx0),
     {ok, DDoc} = mango_util:load_ddoc(Db, mango_idx:ddoc(Idx)),
@@ -105,18 +105,18 @@ handle_index_req(#httpd{method='POST', path_parts=[_, _]}=Req, Db) ->
                     ?MANGO_ERROR(error_saving_ddoc)
             end
     end,
-	chttpd:send_json(Req, {[{result, Status}, {id, Id}, {name, Name}]});
+	couch_httpd:send_json(Req, {[{result, Status}, {id, Id}, {name, Name}]});
 
 handle_index_req(#httpd{path_parts=[_, _]}=Req, _Db) ->
-    chttpd:send_method_not_allowed(Req, "GET,POST");
+    couch_httpd:send_method_not_allowed(Req, "GET,POST");
 
 %% Essentially we just iterate through the list of ddoc ids passed in and
 %% delete one by one. If an error occurs, all previous documents will be
 %% deleted, but an error will be thrown for the current ddoc id.
 handle_index_req(#httpd{method='POST', path_parts=[_, <<"_index">>,
         <<"_bulk_delete">>]}=Req, Db) ->
-    chttpd:validate_ctype(Req, "application/json"),
-    {ok, Opts} = mango_opts:validate_bulk_delete(chttpd:json_body_obj(Req)),
+    couch_httpd:validate_ctype(Req, "application/json"),
+    {ok, Opts} = mango_opts:validate_bulk_delete(couch_httpd:json_body_obj(Req)),
     Idxs = mango_idx:list(Db),
     DDocs = get_bulk_delete_ddocs(Opts),
     DelOpts = get_idx_w_opts(Opts),
@@ -131,11 +131,11 @@ handle_index_req(#httpd{method='POST', path_parts=[_, <<"_index">>,
                 {Success0, [{[Id, {<<"error">>, Error}]} | Fail0]}
         end
     end, {[], []}, DDocs),
-    chttpd:send_json(Req, {[{<<"success">>, Success}, {<<"fail">>, Fail}]});
+    couch_httpd:send_json(Req, {[{<<"success">>, Success}, {<<"fail">>, Fail}]});
 
 handle_index_req(#httpd{path_parts=[_, <<"_index">>,
         <<"_bulk_delete">>]}=Req, _Db) ->
-    chttpd:send_method_not_allowed(Req, "POST");
+    couch_httpd:send_method_not_allowed(Req, "POST");
 
 handle_index_req(#httpd{method='DELETE',
         path_parts=[A, B, <<"_design">>, DDocId0, Type, Name]}=Req, Db) ->
@@ -155,7 +155,7 @@ handle_index_req(#httpd{method='DELETE',
     end,
     case mango_idx:delete(Filt, Db, Idxs, DelOpts) of
         {ok, true} ->
-            chttpd:send_json(Req, {[{ok, true}]});
+            couch_httpd:send_json(Req, {[{ok, true}]});
         {error, not_found} ->
             throw({not_found, missing});
         {error, Error} ->
@@ -163,30 +163,30 @@ handle_index_req(#httpd{method='DELETE',
     end;
 
 handle_index_req(#httpd{path_parts=[_, _, _DDocId0, _Type, _Name]}=Req, _Db) ->
-    chttpd:send_method_not_allowed(Req, "DELETE").
+    couch_httpd:send_method_not_allowed(Req, "DELETE").
 
 
 handle_explain_req(#httpd{method='POST'}=Req, Db) ->
-    chttpd:validate_ctype(Req, "application/json"),
-    {ok, Opts0} = mango_opts:validate_find(chttpd:json_body_obj(Req)),
+    couch_httpd:validate_ctype(Req, "application/json"),
+    {ok, Opts0} = mango_opts:validate_find(couch_httpd:json_body_obj(Req)),
     {value, {selector, Sel}, Opts} = lists:keytake(selector, 1, Opts0),
     Resp = mango_crud:explain(Db, Sel, Opts),
-    chttpd:send_json(Req, Resp);
+    couch_httpd:send_json(Req, Resp);
 
 handle_explain_req(Req, _Db) ->
-    chttpd:send_method_not_allowed(Req, "POST").
+    couch_httpd:send_method_not_allowed(Req, "POST").
 
 
 handle_find_req(#httpd{method='POST'}=Req, Db) ->
-    chttpd:validate_ctype(Req, "application/json"),
-    {ok, Opts0} = mango_opts:validate_find(chttpd:json_body_obj(Req)),
+    couch_httpd:validate_ctype(Req, "application/json"),
+    {ok, Opts0} = mango_opts:validate_find(couch_httpd:json_body_obj(Req)),
     {value, {selector, Sel}, Opts} = lists:keytake(selector, 1, Opts0),
     {ok, Resp0} = start_find_resp(Req, Db, Sel, Opts),
     {ok, AccOut} = run_find(Resp0, Db, Sel, Opts),
     end_find_resp(AccOut);
 
 handle_find_req(Req, _Db) ->
-    chttpd:send_method_not_allowed(Req, "POST").
+    couch_httpd:send_method_not_allowed(Req, "POST").
 
 
 set_user_ctx(#httpd{user_ctx=Ctx}, Db) ->
@@ -213,7 +213,7 @@ get_bulk_delete_ddocs(Opts) ->
 
 get_idx_del_opts(Req) ->
     try
-        WStr = chttpd:qs_value(Req, "w", "2"),
+        WStr = couch_httpd:qs_value(Req, "w", "2"),
         _ = list_to_integer(WStr),
         [{w, WStr}]
     catch _:_ ->
@@ -229,7 +229,7 @@ convert_to_design_id(DDocId) ->
 
 
 start_find_resp(Req, Db, Sel, Opts) ->
-    chttpd:start_delayed_json_response(Req, 200, [], maybe_add_warning(Db, Sel, Opts)).
+    couch_httpd:start_delayed_json_response(Req, 200, [], maybe_add_warning(Db, Sel, Opts)).
 
 
 maybe_add_warning(Db, Selector, Opts) ->
@@ -244,15 +244,15 @@ maybe_add_warning(Db, Selector, Opts) ->
 
 end_find_resp(Acc0) ->
     #vacc{resp=Resp00, buffer=Buf, kvs=KVs, threshold=Max} = Acc0,
-    {ok, Resp0} = chttpd:close_delayed_json_object(Resp00, Buf, "\r\n]", Max),
+    {ok, Resp0} = couch_httpd:close_delayed_json_object(Resp00, Buf, "\r\n]", Max),
     FinalAcc = lists:foldl(fun({K, V}, Acc) ->
         JK = ?JSON_ENCODE(K),
         JV = ?JSON_ENCODE(V),
         [JV, ": ", JK, ",\r\n" | Acc]
     end, [], KVs),
     Chunk = lists:reverse(FinalAcc, ["}\r\n"]),
-    {ok, Resp1} = chttpd:send_delayed_chunk(Resp0, Chunk),
-    chttpd:end_delayed_json_response(Resp1).
+    {ok, Resp1} = couch_httpd:send_delayed_chunk(Resp0, Chunk),
+    couch_httpd:end_delayed_json_response(Resp1).
 
 
 run_find(Resp, Db, Sel, Opts) ->
@@ -260,7 +260,7 @@ run_find(Resp, Db, Sel, Opts) ->
         resp = Resp,
         prepend = "\r\n",
         kvs = [],
-        threshold = chttpd:chunked_response_buffer_size()
+        threshold = couch_httpd:chunked_response_buffer_size()
     },
     mango_crud:find(Db, Sel, fun handle_doc/2, Acc0, Opts).
 
@@ -277,7 +277,7 @@ handle_doc({row, Doc}, Acc0) ->
 maybe_flush_response(#vacc{bufsize=Size, threshold=Max} = Acc, Data, Len)
         when Size > 0 andalso (Size + Len) > Max ->
     #vacc{buffer = Buffer, resp = Resp} = Acc,
-    {ok, R1} = chttpd:send_delayed_chunk(Resp, Buffer),
+    {ok, R1} = couch_httpd:send_delayed_chunk(Resp, Buffer),
     {ok, Acc#vacc{prepend = ",\r\n", buffer = Data, bufsize = Len, resp = R1}};
 maybe_flush_response(Acc0, Data, Len) ->
     #vacc{buffer = Buf, bufsize = Size} = Acc0,

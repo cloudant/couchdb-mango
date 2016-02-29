@@ -140,9 +140,9 @@ result_to_json(DocId, {accepted, NewRev}) ->
         {accepted, true}
     ]};
 result_to_json(DocId, Error) ->
-    % chttpd:error_info/1 because this is coming from fabric
+    % couch_httpd:error_info/1 because this is coming from fabric
     % and not internal mango operations.
-    {_Code, ErrorStr, Reason} = chttpd:error_info(Error),
+    {_Code, ErrorStr, Reason} = couch_httpd:error_info(Error),
     {[
         {id, DocId},
         {error, ErrorStr},
@@ -153,7 +153,7 @@ result_to_json(DocId, Error) ->
 % This is for errors because for some reason we
 % need a different return value for errors? Blargh.
 result_to_json({{Id, Rev}, Error}) ->
-    {_Code, ErrorStr, Reason} = chttpd:error_info(Error),
+    {_Code, ErrorStr, Reason} = couch_httpd:error_info(Error),
     {[
         {id, Id},
         {rev, couch_doc:rev_to_str(Rev)},
